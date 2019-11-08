@@ -3,6 +3,7 @@ extern crate shakmaty;
 
 use std::{io, error};
 use std::io::Write;
+use std::env;
 
 use pgn_reader::{Visitor, Skip, BufferedReader, SanPlus, RawHeader};
 use shakmaty::fen::Fen;
@@ -10,6 +11,12 @@ use std::error::Error;
 use shakmaty::{Position, fen};
 
 fn main() {
+    let args: Vec<String> = env::args().collect();
+    match args.get(1).map(String::as_str) {
+        Some("png2fen") => pgn2fen(&mut io::stdin(), &mut io::stdout()),
+        Some(s) => eprintln!("{} is not a pgn-tools command.", s),
+        None => eprintln!("Usage: pgn-tools png2fen")
+    }
     pgn2fen(&mut io::stdin(), &mut io::stdout());
 
 }
