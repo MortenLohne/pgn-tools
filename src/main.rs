@@ -1,37 +1,91 @@
 extern crate pgn_reader;
 extern crate shakmaty;
 
-use std::io;
-use pgn_reader::{Visitor, Skip, BufferedReader, SanPlus};
+use std::{io, error};
+use std::io::Write;
 
-struct MoveReader {
-    last_move: Option<shakmaty::san::San>,
+use pgn_reader::{Visitor, Skip, BufferedReader, SanPlus, RawHeader};
+use shakmaty::fen::Fen;
+use std::error::Error;
+use shakmaty::{Position, fen};
+
+fn main() {
+    pgn2fen(&mut io::stdin(), &mut io::stdout());
+
 }
 
-impl MoveReader {
-    fn new() -> Self {
-        MoveReader { last_move: None }
+struct Pgn2FenVisitor<'w, W> {
+    chess: Result<shakmaty::Chess, Box<dyn error::Error>>,
+    writer: &'w mut W,
+}
+
+impl<'w, W> Pgn2FenVisitor<'w, W> {
+    fn new(writer: &'w mut W) -> Self {
+        Pgn2FenVisitor { chess: Ok(shakmaty::Chess::default()), writer }
     }
 }
 
-impl Visitor for MoveReader {
-    type Result = shakmaty::san::San;
+impl <'w, W: Write> Visitor for Pgn2FenVisitor<'w, W> {
+    type Result = ();
+
+    fn header(&mut self, key: &[u8], value: RawHeader<'_>) {
+        if key == "FEN".as_bytes() {
+            let key_str = std::str::from_utf8(value.0).unwrap();
+            match key_str.parse::<Fen>() {
+                Ok(setup) =>
+                    self.chess = setup.position()
+                    .map_err(|err| Box::new(err) as Box<dyn Error>),
+                Err(err) => self.chess = Err(Box::new(err)),
+            }
+        }
+    }
 
     fn san(&mut self, san_plus: SanPlus) {
-        self.last_move = Some(san_plus.san);
+        if let Ok(_) = self.chess {
+            match san_plus.san.to_move(self.chess.as_ref().unwrap()) {
+                Ok(mv) => self.chess.as_mut().unwrap().play_unchecked(&mv),
+                Err(err) => {
+                    self.chess = Err(Box::new(err));
+                    return;
+                },
+            }
+            let fen = fen::fen(self.chess.as_ref().unwrap());
+            writeln!(self.writer, "{}", fen).unwrap();
+        }
+
+    }
+
+    fn begin_variation(&mut self) -> Skip {
+        Skip(true)
     }
 
     fn end_game(&mut self) -> Self::Result {
-        self.last_move.take().unwrap()
+        ()
     }
 }
 
-fn main() {
-    let input = io::stdin();
-    let mut reader = BufferedReader::new(input);
+fn pgn2fen<R: io::Read, W: io::Write>(reader: &mut R, writer: &mut W) {
+    let mut pgn_reader = BufferedReader::new(reader);
 
-    while let Ok(last_move) = reader.read_game(&mut MoveReader::new()) {
-        println!("Read move {:?}!", last_move);
+    let mut successes: u64 = 0;
+    let mut failures: u64 = 0;
+
+    loop {
+        let mut visitor = Pgn2FenVisitor::new(writer);
+        let result = pgn_reader.read_game(&mut visitor);
+
+        match result {
+            Ok(None) => break,
+            _ => (),
+        }
+
+        match visitor.chess {
+            Ok(_) => successes += 1,
+            Err(err) => {
+                eprintln!("{}", err);
+                failures += 1;
+            },
+        }
     }
-
+    eprintln!("Parsed {}/{} pgns successfully", successes, successes + failures);
 }
