@@ -1,6 +1,8 @@
 extern crate pgn_reader;
 extern crate shakmaty;
 
+mod tests;
+
 use std::{io, error};
 use std::io::Write;
 use std::env;
@@ -17,8 +19,6 @@ fn main() {
         Some(s) => eprintln!("{} is not a pgn-tools command.", s),
         None => eprintln!("Usage: pgn-tools png2fen")
     }
-    pgn2fen(&mut io::stdin(), &mut io::stdout());
-
 }
 
 struct Pgn2FenVisitor<'w, W> {
@@ -47,6 +47,10 @@ impl <'w, W: Write> Visitor for Pgn2FenVisitor<'w, W> {
         }
     }
 
+    fn begin_game(&mut self) {
+        self.chess = Ok(shakmaty::Chess::default());
+    }
+
     fn san(&mut self, san_plus: SanPlus) {
         if let Ok(_) = self.chess {
             match san_plus.san.to_move(self.chess.as_ref().unwrap()) {
@@ -71,14 +75,14 @@ impl <'w, W: Write> Visitor for Pgn2FenVisitor<'w, W> {
     }
 }
 
-fn pgn2fen<R: io::Read, W: io::Write>(reader: &mut R, writer: &mut W) {
+pub fn pgn2fen<R: io::Read, W: io::Write>(reader: &mut R, writer: &mut W) {
     let mut pgn_reader = BufferedReader::new(reader);
+    let mut visitor = Pgn2FenVisitor::new(writer);
 
     let mut successes: u64 = 0;
     let mut failures: u64 = 0;
 
     loop {
-        let mut visitor = Pgn2FenVisitor::new(writer);
         let result = pgn_reader.read_game(&mut visitor);
 
         match result {
@@ -88,7 +92,7 @@ fn pgn2fen<R: io::Read, W: io::Write>(reader: &mut R, writer: &mut W) {
 
         match visitor.chess {
             Ok(_) => successes += 1,
-            Err(err) => {
+            Err(ref err) => {
                 eprintln!("{}", err);
                 failures += 1;
             },
