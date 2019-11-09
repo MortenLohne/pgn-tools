@@ -22,7 +22,7 @@ impl <'w, W: Write> Visitor for Pgn2FenVisitor<'w, W> {
     type Result = ();
 
     fn header(&mut self, key: &[u8], value: RawHeader<'_>) {
-        if key == "FEN".as_bytes() {
+        if key == b"FEN" {
             let key_str = std::str::from_utf8(value.0).unwrap();
             match key_str.parse::<Fen>() {
                 Ok(setup) =>
@@ -38,7 +38,7 @@ impl <'w, W: Write> Visitor for Pgn2FenVisitor<'w, W> {
     }
 
     fn san(&mut self, san_plus: SanPlus) {
-        if let Ok(_) = self.chess {
+        if self.chess.is_ok() {
             match san_plus.san.to_move(self.chess.as_ref().unwrap()) {
                 Ok(mv) => self.chess.as_mut().unwrap().play_unchecked(&mv),
                 Err(err) => {
@@ -56,9 +56,7 @@ impl <'w, W: Write> Visitor for Pgn2FenVisitor<'w, W> {
         Skip(true)
     }
 
-    fn end_game(&mut self) -> Self::Result {
-        ()
-    }
+    fn end_game(&mut self) -> Self::Result { }
 }
 
 pub fn pgn2fen<R: io::Read, W: io::Write>(reader: &mut R, writer: &mut W) {
@@ -71,9 +69,8 @@ pub fn pgn2fen<R: io::Read, W: io::Write>(reader: &mut R, writer: &mut W) {
     loop {
         let result = pgn_reader.read_game(&mut visitor);
 
-        match result {
-            Ok(None) => break,
-            _ => (),
+        if let Ok(None) = result {
+            break
         }
 
         match visitor.chess {
