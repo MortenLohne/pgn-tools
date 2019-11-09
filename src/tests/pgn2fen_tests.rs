@@ -1,7 +1,7 @@
+use crate::pgn2fen;
 use std::fs;
 use std::io;
 use std::io::Read;
-use crate::pgn2fen;
 
 #[test]
 fn pgn2fen_test() {
@@ -11,7 +11,9 @@ fn pgn2fen_test() {
     let mut output = io::Cursor::new(Vec::new());
     pgn2fen::pgn2fen(&mut input, &mut output);
 
-    assert!(expected_output.bytes().map(Result::unwrap)
+    assert!(expected_output
+        .bytes()
+        .map(Result::unwrap)
         .eq(output.into_inner().into_iter()));
 }
 
@@ -23,6 +25,8 @@ fn pgn2fen_test2() {
     let mut output = io::Cursor::new(Vec::new());
     pgn2fen::pgn2fen(&mut input, &mut output);
 
-    assert!(expected_output.bytes().map(Result::unwrap)
+    assert!(expected_output
+        .bytes()
+        .map(Result::unwrap)
         .eq(output.into_inner().into_iter()));
 }
